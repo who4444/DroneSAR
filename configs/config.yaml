@@ -1,0 +1,40 @@
+# ------------------
+# CONFIGURATION
+# ------------------
+
+# --- Paths ---
+video_input_dir: "./data/input_videos/"  # <-- CHANGED
+submission_output_path: "./submission.json" # <-- CHANGED
+
+reference_images:
+  - "./data/reference_targets/01.jpg"
+  - "./data/reference_targets/02.jpg"
+  - "./data/reference_targets/03.jpg"
+
+# --- Models ---
+finder:
+  checkpoint: "./models/sam2_vit_h.pt"
+  tiling:
+    slice_height: 512
+    slice_width: 512
+    overlap_height_ratio: 0.2
+    overlap_width_ratio: 0.2
+
+identifier:
+  model_name: "convnext_tiny"
+  
+# --- Identification Thresholds (2-Factor) ---
+identification:
+  semantic_threshold: 0.65
+  color_threshold: 30
+
+# --- Tracker Settings (3-Factor Cost) ---
+tracker:
+  max_age: 45
+  min_hits: 3
+  iou_threshold: 0.3
+  
+  cost_weights:
+    motion: 0.40
+    semantic: 0.50
+    color: 0.10
