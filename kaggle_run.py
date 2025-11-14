@@ -169,6 +169,14 @@ Examples:
     logger.info("Drone SAR Pipeline - Kaggle Runner")
     logger.info("=" * 60)
     
+    # Calculate repo root early so relative config paths resolve to the repo folder
+    repo_root = os.path.dirname(os.path.abspath(__file__))
+    # If user passed a relative config path, prefer the one inside the repo root
+    if not os.path.isabs(args.config):
+        candidate_cfg = os.path.join(repo_root, args.config)
+        if os.path.exists(candidate_cfg):
+            args.config = candidate_cfg
+    
     # Find Kaggle base if running on Kaggle
     kaggle_base = find_kaggle_base(args.dataset) if not LOCAL_MODE else None
     
@@ -184,7 +192,6 @@ Examples:
         sys.exit(1)
     
     # Setup Python path for imports
-    repo_root = os.path.dirname(os.path.abspath(__file__))
     if repo_root not in sys.path:
         sys.path.insert(0, repo_root)
     

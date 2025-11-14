@@ -1,19 +1,46 @@
 # ------------------
-# CONFIGURATION
+# CONFIGURATION (generalized for Kaggle + local)
 # ------------------
 
-# --- Paths ---
-video_input_dir: "./data/input_videos/"  # <-- CHANGED
-submission_output_path: "./submission.json" # <-- CHANGED
+# Optional common base for Kaggle datasets (use absolute path on Kaggle).
+# Example: /kaggle/input/zaic-train/dataset
+dataset_root: ""
 
-reference_images:
-  - "./data/reference_targets/01.jpg"
-  - "./data/reference_targets/02.jpg"
-  - "./data/reference_targets/03.jpg"
+# Optional sample identifier (e.g. "public_test/samples/BlackBox_0").
+sample_id: ""
+
+# Backwards-compatible local video folder (used if no dataset_root/sample_id).
+video_input_dir: "./data/input_videos/"
+
+# --- Reference images resolution ---
+# Explicit list of reference image paths (absolute or relative). If provided and valid,
+# these take precedence.
+reference_images: []
+
+# Glob pattern (supports templating with {dataset_root} and {sample_id}).
+# Example resolved on Kaggle:
+# /kaggle/input/zaic-train/dataset/data/public_test/samples/BlackBox_0/object_images/*.jpg
+reference_images_glob: "{dataset_root}/data/{sample_id}/object_images/*.jpg"
+
+# Template for single/multiple indexed reference images. Use reference_image_indices to
+# control which indices to attempt (e.g. [1,2,3]).
+reference_image_template: "{dataset_root}/data/{sample_id}/object_images/img_{idx}.jpg"
+reference_image_indices: [1]
+
+# --- Video input resolution ---
+# Explicit video path (absolute or relative). If set and exists, it wins.
+video_input_path: ""
+
+# Template / glob (templated) to locate video under dataset_root/sample_id
+video_input_template: "{dataset_root}/data/{sample_id}/drone_video.mp4"
+video_input_glob: "{dataset_root}/data/{sample_id}/drone_video*.mp4"
 
 # --- Models ---
 finder:
-  checkpoint: "./models/sam2_vit_h.pt"
+  # Path to YOLO segmentation checkpoint (relative to repo or absolute).
+  # On Kaggle you can set this to something like:
+  # /kaggle/input/<models-dataset>/yolo11n-seg.pt
+  checkpoint: "yolo11n-seg.pt"
   tiling:
     slice_height: 512
     slice_width: 512
@@ -22,7 +49,7 @@ finder:
 
 identifier:
   model_name: "convnext_tiny"
-  
+
 # --- Identification Thresholds (2-Factor) ---
 identification:
   semantic_threshold: 0.65
@@ -33,8 +60,12 @@ tracker:
   max_age: 45
   min_hits: 3
   iou_threshold: 0.3
-  
+
   cost_weights:
     motion: 0.40
     semantic: 0.50
     color: 0.10
+
+# --- Output ---
+# If left relative, runner will write to working dir (on Kaggle: /kaggle/working/)
+submission_output_path: "./submission.json"

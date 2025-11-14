@@ -4,7 +4,7 @@ import numpy as np
 from tqdm import tqdm
 import torch
 import os
-import sys
+import glob
 
 # Ensure models can be imported
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -18,26 +18,126 @@ from utils.color_detector import color_distance, draw_tracks
 
 logger = logging.getLogger(__name__)
 
+def resolve_config_paths(cfg: dict) -> dict:
+    """
+    Resolve dataset_root/sample_id/template/glob fields into concrete file paths.
+    Precedence:
+     - explicit reference_images list (if files exist)
+     - reference_images_glob (expanded)
+     - reference_image_template + reference_image_indices
+    For video:
+     - video_input_path/video_input_dir if exists
+     - video_input_template
+     - video_input_glob (first match)
+     - if video_input_dir is a directory, pick first video file inside
+    """
+    cfg = dict(cfg)  # shallow copy
+    ds_root = cfg.get("dataset_root", "") or ""
+    sample_id = cfg.get("sample_id", "") or ""
+
+    def fmt_template(tpl: str, idx: int | None = None) -> str:
+        if not tpl:
+            return ""
+        mapping = {"dataset_root": ds_root, "sample_id": sample_id, "idx": idx or ""}
+        try:
+            return tpl.format(**mapping)
+        except Exception:
+            return tpl
+
+    # Resolve reference images
+    resolved_refs = []
+    if cfg.get("reference_images"):
+        for p in cfg["reference_images"]:
+            if os.path.isabs(p) and os.path.exists(p):
+                resolved_refs.append(p)
+            else:
+                # try relative to dataset_root then as given
+                cand = os.path.join(ds_root, p) if ds_root and not os.path.isabs(p) else p
+                if os.path.exists(cand):
+                    resolved_refs.append(cand)
+                elif os.path.exists(p):
+                    resolved_refs.append(p)
+                else:
+                    logger.warning("Reference image not found: %s", p)
+    else:
+        # try glob
+        glob_pattern = cfg.get("reference_images_glob")
+        if glob_pattern:
+            pattern = fmt_template(glob_pattern)
+            matches = sorted(glob.glob(pattern))
+            if matches:
+                resolved_refs.extend(matches)
+
+        # try template + indices
+        if not resolved_refs and cfg.get("reference_image_template"):
+            indices = cfg.get("reference_image_indices", [1])
+            for i in indices:
+                p = fmt_template(cfg["reference_image_template"], idx=i)
+                if os.path.exists(p):
+                    resolved_refs.append(p)
+                else:
+                    # try relative to dataset_root
+                    cand = os.path.join(ds_root, p) if ds_root and not os.path.isabs(p) else p
+                    if os.path.exists(cand):
+                        resolved_refs.append(cand)
+
+    if resolved_refs:
+        cfg["reference_images"] = resolved_refs
+
+    # Resolve video path
+    video_candidate = cfg.get("video_input_path") or cfg.get("video_input_dir") or ""
+    if video_candidate and os.path.exists(video_candidate) and os.path.isfile(video_candidate):
+        cfg["video_input_path"] = video_candidate
+    else:
+        # template
+        if cfg.get("video_input_template"):
+            cand = fmt_template(cfg["video_input_template"])
+            if os.path.exists(cand) and os.path.isfile(cand):
+                cfg["video_input_path"] = cand
+
+        # glob
+        if not cfg.get("video_input_path") and cfg.get("video_input_glob"):
+            pattern = fmt_template(cfg["video_input_glob"])
+            matches = sorted(glob.glob(pattern))
+            if matches:
+                cfg["video_input_path"] = matches[0]
+
+        # if a directory was provided, pick first video file inside
+        if not cfg.get("video_input_path") and video_candidate and os.path.isdir(video_candidate):
+            files = sorted(
+                [os.path.join(video_candidate, f) for f in os.listdir(video_candidate)
+                 if f.lower().endswith((".mp4", ".mov", ".avi", ".mkv"))]
+            )
+            if files:
+                cfg["video_input_path"] = files[0]
+
+    if not cfg.get("reference_images"):
+        logger.warning("No reference images resolved from config. Check dataset_root/sample_id or explicit paths.")
+    if not cfg.get("video_input_path"):
+        logger.error("No video_input_path resolved from config. Check dataset_root/sample_id or explicit paths.")
+
+    return cfg
+
 class SearchPipeline:
-    def __init__(self, config):
-        self.config = config
+    def __init__(self, cfg: dict):
+        self.cfg = resolve_config_paths(cfg)
         
         logger.info("Initializing pipeline components...")
         self.finder = YOLODetector(
-            checkpoint_path=config['finder']['checkpoint'],
-            tiling_config=config['finder']['tiling']
+            checkpoint_path=self.cfg['finder']['checkpoint'],
+            tiling_config=self.cfg['finder']['tiling']
         )
         self.identifier = ReferenceEncoder(
-            model_name=config['identifier']['model_name']
+            model_name=self.cfg['identifier']['model_name']
         )
-        self.tracker = ObjectTracker(config['tracker'])
+        self.tracker = ObjectTracker(self.cfg['tracker'])
         
-        self.sem_threshold = config['identification']['semantic_threshold']
-        self.color_threshold = config['identification']['color_threshold']
+        self.sem_threshold = self.cfg['identification']['semantic_threshold']
+        self.color_threshold = self.cfg['identification']['color_threshold']
         
         logger.info("Creating 2-factor target signature...")
         self.target_signature = self.identifier.create_target_signature(
-            config['reference_images']
+            self.cfg['reference_images']
         )
         logger.info("Pipeline initialized successfully.")
 
@@ -109,7 +209,7 @@ class SearchPipeline:
         Returns a dictionary formatted for the submission.
         """
         
-        in_path = self.config['video_input_path']
+        in_path = self.cfg['video_input_path']
         cap = cv2.VideoCapture(in_path)
         
         if not cap.isOpened():
