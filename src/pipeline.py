@@ -5,6 +5,7 @@ from tqdm import tqdm
 import torch
 import os
 import glob
+import sys
 
 # Ensure models can be imported
 script_dir = os.path.dirname(os.path.abspath(__file__))

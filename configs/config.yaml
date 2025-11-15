@@ -20,11 +20,11 @@ reference_images: []
 # Glob pattern (supports templating with {dataset_root} and {sample_id}).
 # Example resolved on Kaggle:
 # /kaggle/input/zaic-train/dataset/data/public_test/samples/BlackBox_0/object_images/*.jpg
-reference_images_glob: "{dataset_root}/data/{sample_id}/object_images/*.jpg"
+reference_images_glob: "{dataset_root}/data/public_test/{sample_id}/object_images/*.jpg"
 
 # Template for single/multiple indexed reference images. Use reference_image_indices to
 # control which indices to attempt (e.g. [1,2,3]).
-reference_image_template: "{dataset_root}/data/{sample_id}/object_images/img_{idx}.jpg"
+reference_image_template: "{dataset_root}/data/public_test/{sample_id}/object_images/img_{idx}.jpg"
 reference_image_indices: [1]
 
 # --- Video input resolution ---
@@ -32,8 +32,8 @@ reference_image_indices: [1]
 video_input_path: ""
 
 # Template / glob (templated) to locate video under dataset_root/sample_id
-video_input_template: "{dataset_root}/data/{sample_id}/drone_video.mp4"
-video_input_glob: "{dataset_root}/data/{sample_id}/drone_video*.mp4"
+video_input_template: "{dataset_root}/data/public_test/{sample_id}/drone_video.mp4"
+video_input_glob: "{dataset_root}/data/public_test/{sample_id}/drone_video*.mp4"
 
 # --- Models ---
 finder:
